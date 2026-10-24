@@ -1,0 +1,13 @@
+[package]
+name = "sploot-core"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = ["encode"]
+# BC encoding via intel_tex_2. Turn off if the ISPC kernels won't build on a target.
+encode = ["image_dds/encode"]
+
+[dependencies]
+image = { workspace = true }
+image_dds = { workspace = true }

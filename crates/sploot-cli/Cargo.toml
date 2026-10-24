@@ -1,0 +1,18 @@
+[package]
+name = "sploot-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "sploot"
+path = "src/main.rs"
+
+[features]
+default = ["gui"]
+# `cargo build --no-default-features` gives a CLI-only build without the viewer
+gui = ["dep:sploot-gui"]
+
+[dependencies]
+sploot-core = { workspace = true }
+sploot-gui = { workspace = true, optional = true }
+clap = { workspace = true }

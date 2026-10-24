@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/sploot-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+# Versions and features are set once here; crates opt in with `{ workspace = true }`.
+[workspace.dependencies]
+# Internal crates
+sploot-core = { path = "crates/sploot-core" }
+sploot-gui = { path = "crates/sploot-gui" }
+
+# CLI
+clap = { version = "4.6.7", features = ["derive"] }
+
+# Loading (core)
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "tga", "tiff", "exr", "hdr", "rayon"] }
+# `encode` (intel_tex_2 / ISPC) is switched on through sploot-core's `encode` feature
+image_dds = { version = "0.7.2", default-features = false, features = ["ddsfile", "image", "strum"] }

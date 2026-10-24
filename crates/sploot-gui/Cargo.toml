@@ -1,0 +1,7 @@
+[package]
+name = "sploot-gui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sploot-core = { workspace = true }
