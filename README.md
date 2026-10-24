@@ -21,7 +21,7 @@ Most image tools treat a texture as a single picture. In a real-time pipeline it
 ## Usage today
 
 ```sh
-cargo run -- luma samples/TCom_Wood_OakVeneer2_1K_albedo.tif --srgb
+cargo run -- luma path/to/albedo.png --srgb
 ```
 
 or, with the binary on your path:
@@ -221,4 +221,4 @@ Notes for myself, not commitments.
 
 ## License
 
-MIT (TBD)
+MIT. See [LICENSE](LICENSE).
