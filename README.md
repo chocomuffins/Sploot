@@ -18,6 +18,21 @@ Most image tools treat a texture as a single picture. In a real-time pipeline it
 
 ---
 
+## Install
+
+Download the archive for your platform from [Releases](https://github.com/chocomuffins/Sploot/releases), unpack it, and put `sploot` (or `sploot.exe`) somewhere on your `PATH`.
+
+| Platform | Archive |
+|---|---|
+| macOS, Apple Silicon | `aarch64-apple-darwin.tar.gz` |
+| macOS, Intel | `x86_64-apple-darwin.tar.gz` |
+| Windows | `x86_64-pc-windows-msvc.zip` |
+| Linux | `x86_64-unknown-linux-gnu.tar.gz` |
+
+The binaries aren't signed. On macOS, clear the download quarantine once with `xattr -d com.apple.quarantine sploot`. On Windows, SmartScreen may ask you to confirm the first run.
+
+---
+
 ## Usage today
 
 ```sh
@@ -178,6 +193,19 @@ cargo fmt --all && cargo clippy --workspace --all-targets
 ```
 
 CI runs fmt, clippy and tests on macOS, Windows and Ubuntu.
+
+### Releasing
+
+1. Bump `version` under `[workspace.package]` in the root `Cargo.toml`, then run `cargo build` so `Cargo.lock` updates.
+2. Commit and push to `main`.
+3. Tag and push the tag:
+
+   ```sh
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+The Release workflow checks that the tag matches the Cargo version, then runs the tests, builds for every platform, and publishes a GitHub Release with the archives, `SHA256SUMS.txt` and auto-generated notes.
 
 ### Layout
 
