@@ -6,15 +6,12 @@ pub use color::*; // re-export: sploot_core::SrgbToLinear, LinearColor, etc.
 pub mod load;
 pub mod metrics;
 pub mod stats;
-// TODO: mips.rs, mipmap generation: build a reference mip chain from mip 0
-//       (box / triangle / Kaiser / Lanczos, filtered in linear space, wrap edges for tiling textures).
-// TODO: cache.rs, caching results in the OS cache folder via the `directories` crate:
-//       ProjectDirs::from("com", "Choco", "Sploot")?.cache_dir().join(SPLOOT_VERSION)
-//       (macOS ~/Library/Caches/..., Windows %LOCALAPPDATA%\...\cache, Linux ~/.cache/...).
-//       Stats as JSON per CacheKey (serde + serde_json), pixel results (mips, BC encodes) as DDS.
-//       Write to name.tmp, then rename, so two viewers never read a half-written file.
-//       Sidecar files next to the texture only as an opt-in flag.
-//       Needs directories, serde, serde_json, blake3 in [workspace.dependencies].
+// Planned: TODOs only for now, see each file.
+pub mod cache;
+use serde::{Deserialize, Serialize};
+pub mod compress;
+pub mod heatmap;
+pub mod mips;
 
 pub const SPLOOT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -27,15 +24,11 @@ pub struct ImageInfo {
     pub sploot_version: &'static str,
     pub content_hash: [u8; 32],
     pub mip_level: u8,
-    pub modified: std::time::SystemTime, // from std::fs::metadata(path)?.modified()?
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CacheKey {
-    pub content_hash: [u8; 32],
-    pub sploot_version: &'static str,
+    pub modified: std::time::SystemTime,
     pub color_space: ColorSpace,
-    // later: filter, quality, mip level...
+    pub compression: Compression,
+    pub quality: Quality,
+    // pub alpha_stats: AlphaStats
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,7 +39,7 @@ pub enum FilterType {
     Lanczos,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Compression {
     Bc1,
     Bc3,
@@ -60,8 +53,9 @@ pub enum Compression {
 }
 
 /// BC encoder effort. Maps one-to-one onto image_dds::Quality.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Quality {
+    None,
     Fast,
     Normal,
     Slow,

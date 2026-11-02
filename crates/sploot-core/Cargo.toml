@@ -11,3 +11,6 @@ encode = ["image_dds/encode"]
 [dependencies]
 image = { workspace = true }
 image_dds = { workspace = true }
+blake3 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

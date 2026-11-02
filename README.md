@@ -10,11 +10,18 @@ A small command-line tool, written in Rust, for inspecting textures the way a te
 
 ## Why
 
-Most image tools treat a texture as a single picture. In a real-time pipeline it's a mip chain, it gets block-compressed, and it lives in either linear or sRGB space. `sploot` is meant to answer quick questions about that, without opening a DCC or an engine:
+A lot of what I check on a texture is the same few numbers: average luminance, average color, alpha coverage, whether the mips are right. Getting them usually means starting Photoshop or Substance Designer, waiting for it to load, and clicking through panels. That's a heavy tool for a quick question.
 
+`sploot` is the lightweight version: a single binary that starts instantly, prints the answer in the terminal, and (once batch mode lands) runs the same check over a whole folder.
+
+It also treats a texture the way a real-time pipeline does. A texture isn't a single picture: it's a mip chain, it gets block-compressed, and it lives in either linear or sRGB space. So `sploot` answers questions like:
+
+- What's the average luminance of this albedo or HDR, measured correctly (in linear space)?
+- What's the average luminance of every albedo in this folder?
 - Do these mips actually match what a clean downsample would produce?
 - What does BC1 vs BC7 (or fast vs slow quality) do to this texture, and where does it break?
-- What's the average luminance of this albedo or HDR, measured correctly?
+
+Also, I just wanted to learn some more in-depth programming. I started with C++ but felt Rust was a bit more friendly coming from my Python background.
 
 ---
 
@@ -22,12 +29,12 @@ Most image tools treat a texture as a single picture. In a real-time pipeline it
 
 Download the archive for your platform from [Releases](https://github.com/chocomuffins/Sploot/releases), unpack it, and put `sploot` (or `sploot.exe`) somewhere on your `PATH`.
 
-| Platform | Archive |
-|---|---|
-| macOS, Apple Silicon | `aarch64-apple-darwin.tar.gz` |
-| macOS, Intel | `x86_64-apple-darwin.tar.gz` |
-| Windows | `x86_64-pc-windows-msvc.zip` |
-| Linux | `x86_64-unknown-linux-gnu.tar.gz` |
+| Platform             | Archive                           |
+| -------------------- | --------------------------------- |
+| macOS, Apple Silicon | `aarch64-apple-darwin.tar.gz`     |
+| macOS, Intel         | `x86_64-apple-darwin.tar.gz`      |
+| Windows              | `x86_64-pc-windows-msvc.zip`      |
+| Linux                | `x86_64-unknown-linux-gnu.tar.gz` |
 
 The binaries aren't signed. On macOS, clear the download quarantine once with `xattr -d com.apple.quarantine sploot`. On Windows, SmartScreen may ask you to confirm the first run.
 
@@ -46,7 +53,10 @@ sploot luma <file> --srgb     # 8-bit albedo, UI, anything authored in sRGB
 sploot luma <file> --linear   # data maps (normal, roughness, masks) and float sources
 ```
 
-One of `--srgb` / `--linear` is required: sploot never guesses the color space silently.
+One of `--srgb` / `--linear` is required: sploot (currently) does not guess the color space silently.
+
+To check it works, try a test image from `samples/` with a known answer:
+`sploot luma samples/sploot_checker.png --srgb` gives an average luminance of exactly 0.5.
 
 ![sploot luma output](assets/screenshots/luma-overview.png)
 
@@ -65,29 +75,35 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 
 ### Core
 
-| Status | Item                                                                                    |
-| ------ | --------------------------------------------------------------------------------------- |
-| ✅     | Load PNG / TGA / JPG / TIFF                                                             |
-| ⬜     | Load DDS (including existing mip chains)                                                |
-| 🚧     | Load EXR / HDR for float data (decoder enabled, not tested yet)                         |
-| ✅     | Explicit color space handling (`--srgb` / `--linear`), never guess silently             |
-| ⬜     | Detect color space from file metadata when no flag is given (explicit flag always wins) |
-| ⬜     | Output report as plain text and JSON (`--json`)                                         |
-| ⬜     | Write diff / heatmap images to disk                                                     |
+| Status | Item                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------------- |
+| ✅     | Load PNG / TGA / JPG / TIFF                                                                             |
+| ⬜     | Load DDS (including existing mip chains)                                                                |
+| 🚧     | Load EXR / HDR for float data (decoder enabled, not tested yet; half-float EXRs report as 32-bit float) |
+| ⬜     | Images over 4K are measured at 4K for stats, to save memory (`--full-res` to skip)                      |
+| ✅     | Explicit color space handling (`--srgb` / `--linear`), never guess silently                             |
+| ⬜     | Detect color space from file metadata when no flag is given (explicit flag always wins)                 |
+| ✅     | Plain-text report (tables)                                                                              |
+| ⬜     | JSON output (`--json`)                                                                                  |
+| ⬜     | Write diff / heatmap images to disk                                                                     |
+| ⬜     | Cache results in the OS cache folder, keyed by content hash, sploot version and color space             |
+| ⬜     | Tests: color conversions, stats, metrics                                                                |
 
 ### 1. Mipmap comparison
 
-| Status | Item                                                                       |
-| ------ | -------------------------------------------------------------------------- |
-| ⬜     | Extract every mip level from a DDS                                         |
-| ⬜     | Generate a reference mip chain from mip 0 (box, triangle, Kaiser, Lanczos) |
-| ⬜     | Compare stored mips against the reference, per level                       |
-| ⬜     | Compare two textures' mip chains against each other                        |
-| ⬜     | Metrics per mip: max abs error, mean error, RMSE, PSNR                     |
-| ⬜     | Per-channel results (R, G, B, A separately)                                |
-| ⬜     | Diff heatmap output per mip                                                |
-| ⬜     | Downsample in linear space when the source is sRGB                         |
-| ⬜     | Normal map mode (renormalize, report angular error in degrees)             |
+| Status | Item                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------- |
+| ⬜     | Extract every mip level from a DDS                                                                             |
+| ⬜     | Generate a reference mip chain from mip 0 (box, triangle, Kaiser, Lanczos), wrapping edges for tiling textures |
+| ⬜     | Compare stored mips against the reference, per level                                                           |
+| ⬜     | Compare two textures' mip chains against each other                                                            |
+| ⬜     | Metrics per mip: max abs error, mean error, RMSE, PSNR                                                         |
+| ⬜     | Per-channel results (R, G, B, A separately)                                                                    |
+| ⬜     | Diff heatmap output per mip                                                                                    |
+| ⬜     | Downsample in linear space when the source is sRGB                                                             |
+| ⬜     | Normal map mode (renormalize, report angular error in degrees)                                                 |
+| ⬜     | Alpha coverage per mip at a given cutoff, compared to mip 0 (foliage / fences thinning out)                    |
+| ⬜     | Coverage-preserving alpha mips (scale alpha per level to keep mip 0's coverage)                                |
 
 ### 2. Compression preview
 
@@ -103,17 +119,22 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 | ⬜     | Summary table ranking settings by quality vs size               |
 | ⬜     | ASTC block sizes (later)                                        |
 
-### 3. Luminance
+### 3. Luminance and color stats
 
-| Status | Item                                                                                 |
-| ------ | ------------------------------------------------------------------------------------ |
-| ✅     | Average luminance (Rec. 709 weights, computed in linear space)                       |
-| ✅     | Log-average (geometric mean) luminance for HDR / exposure work                       |
-| ✅     | Min / max / median luminance, std dev                                                |
-| ✅     | Per-channel average                                                                  |
-| 🚧     | Optional alpha mask (ignore transparent pixels): in core, not exposed in the CLI yet |
-| ⬜     | Luminance histogram output                                                           |
-| ⬜     | Batch mode over a folder, CSV output                                                 |
+| Status | Item                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| ✅     | Average luminance (Rec. 709 weights, computed in linear space)                                                           |
+| ✅     | Log-average (geometric mean) luminance for HDR / exposure work                                                           |
+| ✅     | Min / max / median luminance, std dev                                                                                    |
+| ✅     | Per-channel average                                                                                                      |
+| ✅     | Average color swatch in the terminal (true color; skipped when piped or `NO_COLOR` is set)                               |
+| ✅     | HEX value of the average color, under the swatch                                                                         |
+| ⬜     | White balance check (R / G and B / G of the average color)                                                               |
+| ⬜     | Noise estimate (sigma from a high-pass residual)                                                                         |
+| 🚧     | Optional alpha mask (ignore transparent pixels): in core, not exposed in the CLI yet; cutoff should follow the bit depth |
+| ⬜     | Luminance histogram output                                                                                               |
+| ⬜     | Batch mode over a folder, CSV output                                                                                     |
+| ⬜     | Compare stats side by side across images or mips (luminance, average color), with the difference to the first            |
 
 ### 4. Image previewer
 
@@ -135,9 +156,22 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 
 ### More to come
 
-| Status | Item                 |
-| ------ | -------------------- |
-| ⬜     | _Add new ideas here_ |
+| Status | Item                                                                                                                                                                                          |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ⬜     | Percentiles (1st / 99th) as a robust min / max for HDR                                                                                                                                        |
+| ⬜     | Count infinities next to NaNs                                                                                                                                                                 |
+| ⬜     | Write-up: foliage and fence shimmer. Coverage-preserving mips, alpha sharpening with screen-space derivatives, alpha-to-coverage vs. hashed / dithered alpha, and how each interacts with TAA |
+| ⬜     | _Add new ideas here_                                                                                                                                                                          |
+
+### Known issues
+
+Marked `TODO(bug)` in the code.
+
+| Where                              | Issue                                                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `sploot luma`                      | With no alpha cutoff, luminance and color include every pixel, but alpha coverage leaves out alpha-0 pixels, so the two can disagree. |
+| `stats.rs`, `log_average`          | The epsilon assumes 0–1 values; on raw 8-bit or 16-bit data the result is wrong. The CLI always passes 0–1, so it isn't affected.     |
+| `stats.rs`, `estimate_noise_sigma` | Panics on empty input. Not reachable from the CLI yet.                                                                                |
 
 ---
 
@@ -160,6 +194,9 @@ sploot luma rock_albedo.png --srgb
 
 # Log-average luminance of an HDR, ignoring nothing
 sploot luma sky.exr --log-average
+
+# Compare stats of several textures side by side (difference to the first)
+sploot luma rock_old.png rock_new.png rock_v3.png --srgb
 
 # Machine-readable output
 sploot luma textures/ --json
@@ -212,9 +249,11 @@ The Release workflow checks that the tag matches the Cargo version, then runs th
 ```
 crates/
   sploot-core/   library: color (sRGB <-> linear, luminance), stats, load, metrics
+                 + mips, compress, heatmap, cache: planned (TODOs only)
   sploot-cli/    the `sploot` binary
   sploot-gui/    previewer (placeholder for now)
-samples/         test textures
+samples/         test textures and DDS files (see samples/README.md)
+tools/           scripts that generate the test textures
 assets/          icon, screenshots
 ```
 
@@ -231,7 +270,7 @@ Notes for myself, not commitments.
 | DDS reading + BC encoding / decoding | `image_dds`                        | added, not used yet |
 | Resampling filters                   | `fast_image_resize` or hand-rolled | candidate           |
 | JSON output, cached stats            | `serde`, `serde_json`              | candidate           |
-| Content hash for the cache           | `blake3`                           | candidate           |
+| Content hash for the cache           | `blake3`                           | added, not used yet |
 | OS cache folder                      | `directories`                      | candidate           |
 | Parallelism                          | `rayon` (via `image`)              | in use              |
 | Preview window                       | `eframe` / `egui`                  | candidate           |

@@ -1,8 +1,10 @@
 //! Color conversions: sRGB <-> linear, luminance.
 //! All math in sploot-core happens on linear values.
 
+use serde::{Deserialize, Serialize};
+
 /// How a source's stored values are encoded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ColorSpace {
     Srgb,
     Linear,
@@ -26,7 +28,7 @@ pub type Mat3 = [[f32; 3]; 3];
 pub const REC709_TO_XYZ: Mat3 = [
     [0.4124564, 0.3575761, 0.1804375],
     [0.2126729, 0.7151522, 0.0721750],
-    [0.0193339, 0.1191920, 0.9503041],
+    [0.0193339, 0.119192, 0.9503041],
 ];
 
 pub const REC709_TO_ACESCG: Mat3 = [
@@ -100,7 +102,10 @@ pub fn linear_to_srgb_rgba([r, g, b, a]: [f32; 4]) -> [f32; 4] {
 }
 
 pub fn linear_to_srgb_u8(c: f32) -> u8 {
-    (c.linear_to_srgb().clamp(0.0, 1.0) * 255.0).round() as u8
+    (c.linear_to_srgb()
+        .clamp(0.0, 1.0)
+        * 255.0)
+        .round() as u8
 }
 
 /// A color as stored: sRGB-encoded. Decode with `to_linear` before doing math on it.
@@ -123,4 +128,8 @@ impl LinearColor {
     pub fn luminance(self) -> f32 {
         dot3(self.0, REC709_LUMINANCE)
     }
+}
+
+pub fn rgb_to_hex([r, g, b]: [u8; 3]) -> String {
+    format!("#{r:02x}{g:02x}{b:02x}")
 }

@@ -20,3 +20,8 @@ clap = { version = "4.6.7", features = ["derive"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "tga", "tiff", "exr", "hdr", "rayon"] }
 # `encode` (intel_tex_2 / ISPC) is switched on through sploot-core's `encode` feature
 image_dds = { version = "0.7.2", default-features = false, features = ["ddsfile", "image", "strum"] }
+
+blake3 = "1.8.7"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }

@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use sploot_core::{ColorSpace, linear_to_srgb_u8, load, stats::ImageStats};
+use sploot_core::{ColorSpace, linear_to_srgb_u8, load, rgb_to_hex, stats::ImageStats};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
@@ -15,21 +15,35 @@ struct Cli {
 enum Command {
     /// Measure average / log-average luminance
     Luma(LumaArgs),
+    // TODO: `sploot mips <a> [b]`: compare stored mips against a reference chain (core mips.rs),
+    //       or two textures' chains against each other. --filter, --heatmap <dir>, --normal
+    //       (renormalize, report angular error in degrees). Prints metrics per mip and channel.
+    // TODO: `sploot compress <file>`: --formats bc1,bc7 --quality fast,slow --out <dir>
+    //       (core compress.rs). Prints the ranking table, writes the tiled image and heatmaps.
+    // TODO: `sploot view [a] [b]`: opens the previewer (sploot-gui), behind the `gui` feature.
 }
 
 #[derive(Args, Debug)]
 struct LumaArgs {
     /// Texture file or folder
+    // TODO: batch mode: when input is a folder, run every texture in it (one row per file)
+    //       and add --csv for a spreadsheet-friendly table. Only single files work today.
+    // TODO: compare: accept several files (or mips) and print their stats side by side,
+    //       one column per image plus the difference to the first (luminance, average color).
     input: PathBuf,
 
     #[command(flatten)]
     color: ColorSpaceArgs,
 
     /// Geometric mean, for HDR / exposure work
+    // TODO: unused; the table always shows log-average. Remove it, or make it print only
+    //       that number (handy in scripts).
     #[arg(long)]
     log_average: bool,
 
     /// Machine-readable output
+    // TODO: unused; print ImageStats (plus width / height / format) as JSON instead of the tables.
+    //       Needs serde::Serialize on the stats structs (see stats.rs) and serde_json.
     #[arg(long)]
     json: bool,
 }
@@ -67,6 +81,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn luma(args: &LumaArgs) -> Result<(), Box<dyn std::error::Error>> {
     let img = load::load(&args.input, args.color.color_space())?;
+    // TODO: alpha mask: add --alpha-cutoff <value> and pass it here instead of None,
+    //       so transparent pixels can be left out of luminance / color (see TODO(bug) in stats.rs).
     let stats = ImageStats::from_pixels(&img.pixels, None).ok_or("image has no pixels")?;
 
     println!("{}", args.input.display());
@@ -119,13 +135,17 @@ fn luma(args: &LumaArgs) -> Result<(), Box<dyn std::error::Error>> {
             "| {:<13} | {:>8.4} | {:>8.4} | {:>8.4} |",
             "linear", avg[0], avg[1], avg[2]
         );
+        // Build the row first, so the HEX line below can be indented to the swatch column.
+        let row = format!(
+            "| {:<13} | {:>8} | {:>8} | {:>8} | ",
+            "sRGB 8-bit", r8, g8, b8
+        );
+        println!("{row}{}", swatch(avg));
         println!(
-            "| {:<13} | {:>8} | {:>8} | {:>8} | {}",
-            "sRGB 8-bit",
-            r8,
-            g8,
-            b8,
-            swatch(avg)
+            "{:width$}{}",
+            "",
+            rgb_to_hex([r8, g8, b8]),
+            width = row.len()
         );
         println!();
     }
@@ -156,7 +176,7 @@ fn thousands(n: usize) -> String {
     let digits = n.to_string();
     let mut out = String::new();
     for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(ch);
