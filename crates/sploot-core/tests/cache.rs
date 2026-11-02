@@ -18,9 +18,7 @@ fn hash_test() {
     let path_hashed = blake3::hash(path.as_bytes());
     println!("Path: {0}", path_hashed);
 
-    let modified_time = std::fs::metadata(path)
-        .expect("sample missing")
-        .modified();
+    let modified_time = std::fs::metadata(path).expect("sample missing").modified();
     println!("Last modified: {:?}", modified_time);
 
     let version_hashed = blake3::hash(SPLOOT_VERSION.as_bytes());
@@ -68,10 +66,7 @@ fn temp_dir(name: &str) -> PathBuf {
 fn file_stem_is_stable_hex() {
     let stem = checker_key().file_stem();
     assert_eq!(stem.len(), 64);
-    assert!(
-        stem.chars()
-            .all(|c| c.is_ascii_hexdigit())
-    );
+    assert!(stem.chars().all(|c| c.is_ascii_hexdigit()));
     assert_eq!(stem, checker_key().file_stem(), "same key, same name");
 }
 
@@ -107,11 +102,7 @@ fn save_leaves_no_tmp_file() {
         .map(|e| e.unwrap().file_name())
         .collect();
     assert_eq!(names.len(), 1);
-    assert!(
-        names[0]
-            .to_string_lossy()
-            .ends_with(".json")
-    );
+    assert!(names[0].to_string_lossy().ends_with(".json"));
 }
 
 #[test]

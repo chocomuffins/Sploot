@@ -44,9 +44,7 @@ impl CacheKey {
     /// BLAKE3 of the key's JSON, as hex.
     pub fn file_stem(&self) -> String {
         let json = serde_json::to_vec(self).expect("CacheKey serializes");
-        blake3::hash(&json)
-            .to_hex()
-            .to_string()
+        blake3::hash(&json).to_hex().to_string()
     }
 }
 

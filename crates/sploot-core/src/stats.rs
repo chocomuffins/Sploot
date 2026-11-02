@@ -77,12 +77,7 @@ impl<T: Copy + Into<f64>> Stats for [T] {
         if self.is_empty() {
             return None;
         }
-        Some(
-            self.iter()
-                .map(|&v| v.into())
-                .sum::<f64>()
-                / self.len() as f64,
-        )
+        Some(self.iter().map(|&v| v.into()).sum::<f64>() / self.len() as f64)
     }
 
     /// Geometric mean: exp(mean(ln(v + epsilon))). Epsilon keeps black pixels from giving ln(0) = -inf.
@@ -100,15 +95,11 @@ impl<T: Copy + Into<f64>> Stats for [T] {
     }
 
     fn min_value(&self) -> Option<f64> {
-        self.iter()
-            .map(|&v| v.into())
-            .reduce(f64::min)
+        self.iter().map(|&v| v.into()).reduce(f64::min)
     }
 
     fn max_value(&self) -> Option<f64> {
-        self.iter()
-            .map(|&v| v.into())
-            .reduce(f64::max)
+        self.iter().map(|&v| v.into()).reduce(f64::max)
     }
 
     /// Uses select_nth_unstable on an f64 copy (no full sort).
@@ -116,20 +107,14 @@ impl<T: Copy + Into<f64>> Stats for [T] {
         if self.is_empty() {
             return None;
         }
-        let mut v: Vec<f64> = self
-            .iter()
-            .map(|&x| x.into())
-            .collect();
+        let mut v: Vec<f64> = self.iter().map(|&x| x.into()).collect();
         let mid = v.len() / 2;
         let (lower_half, upper_mid, _) = v.select_nth_unstable_by(mid, f64::total_cmp);
         let upper_mid = *upper_mid;
         if self.len() % 2 == 1 {
             return Some(upper_mid);
         }
-        let lower_mid = lower_half
-            .iter()
-            .copied()
-            .reduce(f64::max)?;
+        let lower_mid = lower_half.iter().copied().reduce(f64::max)?;
         Some((lower_mid + upper_mid) / 2.0)
     }
 
@@ -147,9 +132,7 @@ impl<T: Copy + Into<f64>> Stats for [T] {
     }
 
     fn count_nan(&self) -> usize {
-        self.iter()
-            .filter(|&&v| v.into().is_nan())
-            .count()
+        self.iter().filter(|&&v| v.into().is_nan()).count()
     }
 }
 
@@ -197,19 +180,10 @@ impl RgbStats {
 impl AlphaStats {
     /// Measured over all pixels, including transparent ones.
     pub fn from_pixels(pixels: &[[f32; 4]], alpha_cutoff: f32) -> Option<Self> {
-        let alpha: Vec<f32> = pixels
-            .iter()
-            .map(|p| p[3])
-            .collect();
-        let transparent_count = alpha
-            .iter()
-            .filter(|&&a| a <= alpha_cutoff)
-            .count();
+        let alpha: Vec<f32> = pixels.iter().map(|p| p[3]).collect();
+        let transparent_count = alpha.iter().filter(|&&a| a <= alpha_cutoff).count();
         Some(Self {
-            opaque_count: alpha
-                .iter()
-                .filter(|&&a| a >= 1.0)
-                .count(),
+            opaque_count: alpha.iter().filter(|&&a| a >= 1.0).count(),
             transparent_count,
             coverage: (alpha.len() - transparent_count) as f64 / alpha.len() as f64,
             min: alpha.min_value()?,
@@ -236,11 +210,7 @@ impl ImageStats {
             .iter()
             .filter(|p| alpha_cutoff.is_none_or(|c| p[3] > c))
             .collect();
-        let channel = |i: usize| {
-            kept.iter()
-                .map(|p| p[i])
-                .collect::<Vec<f32>>()
-        };
+        let channel = |i: usize| kept.iter().map(|p| p[i]).collect::<Vec<f32>>();
         let lum: Vec<f32> = kept
             .iter()
             .map(|p| LinearColor([p[0], p[1], p[2]]).luminance())
@@ -262,11 +232,7 @@ pub trait ChannelMean {
 
 impl<const N: usize> ChannelMean for [f32; N] {
     fn channel_mean(self) -> f32 {
-        (self
-            .iter()
-            .map(|&v| v as f64)
-            .sum::<f64>()
-            / N as f64) as f32
+        (self.iter().map(|&v| v as f64).sum::<f64>() / N as f64) as f32
     }
 }
 
@@ -277,10 +243,7 @@ pub fn estimate_noise_sigma(residual: &[f32]) -> f32 {
     let mut v: Vec<f32> = residual.to_vec();
     v.sort_by(f32::total_cmp);
     let med = v[v.len() / 2];
-    let mut dev: Vec<f32> = v
-        .iter()
-        .map(|x| (x - med).abs())
-        .collect();
+    let mut dev: Vec<f32> = v.iter().map(|x| (x - med).abs()).collect();
     dev.sort_by(f32::total_cmp);
     dev[dev.len() / 2] * 1.4826 / (9.0f32 / 8.0).sqrt()
 }

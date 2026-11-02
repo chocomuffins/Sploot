@@ -102,10 +102,7 @@ pub fn linear_to_srgb_rgba([r, g, b, a]: [f32; 4]) -> [f32; 4] {
 }
 
 pub fn linear_to_srgb_u8(c: f32) -> u8 {
-    (c.linear_to_srgb()
-        .clamp(0.0, 1.0)
-        * 255.0)
-        .round() as u8
+    (c.linear_to_srgb().clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
 /// A color as stored: sRGB-encoded. Decode with `to_linear` before doing math on it.
