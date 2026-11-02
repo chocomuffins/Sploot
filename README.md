@@ -1,4 +1,6 @@
-# Sploot
+# Sploot: Texture Analyzer
+
+**Fast command-line checks for game textures: luminance, color, mips and BC compression, without opening Photoshop.**
 
 _Low to the ground, close to the pixels._ 🐕
 
@@ -259,22 +261,22 @@ assets/          icon, screenshots
 
 ---
 
-## Candidate crates
+## Crates
 
-Notes for myself, not commitments.
+In use, added for upcoming work, and candidates (not commitments).
 
-| Purpose                              | Crate                              | Status              |
-| ------------------------------------ | ---------------------------------- | ------------------- |
-| CLI arguments                        | `clap`                             | in use              |
-| Common image formats, EXR / HDR      | `image`                            | in use              |
-| DDS reading + BC encoding / decoding | `image_dds`                        | added, not used yet |
-| Resampling filters                   | `fast_image_resize` or hand-rolled | candidate           |
-| JSON output, cached stats            | `serde`, `serde_json`              | candidate           |
-| Content hash for the cache           | `blake3`                           | added, not used yet |
-| OS cache folder                      | `directories`                      | candidate           |
-| Parallelism                          | `rayon` (via `image`)              | in use              |
-| Preview window                       | `eframe` / `egui`                  | candidate           |
-| In-terminal preview                  | `viuer`                            | candidate           |
+| Purpose                              | Crate                              | Status               |
+| ------------------------------------ | ---------------------------------- | -------------------- |
+| CLI arguments                        | `clap`                             | in use (cli)         |
+| Common image formats, EXR / HDR      | `image`                            | in use (core: load)  |
+| Parallelism                          | `rayon` (via `image`)              | in use               |
+| Cache file names (hash of the key)   | `blake3`                           | in use (core: cache) |
+| Cache files; `--json` output later   | `serde`, `serde_json`              | in use (core: cache) |
+| DDS reading + BC encoding / decoding | `image_dds`                        | added, not used yet  |
+| OS cache folder                      | `directories`                      | candidate            |
+| Resampling filters                   | `fast_image_resize` or hand-rolled | candidate            |
+| Preview window                       | `eframe` / `egui`                  | candidate            |
+| In-terminal preview                  | `viuer`                            | candidate            |
 
 ---
 
