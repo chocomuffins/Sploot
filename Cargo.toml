@@ -4,7 +4,7 @@ members = ["crates/*"]
 default-members = ["crates/sploot-cli"]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.51"
 edition = "2024"
 
 # Versions and features are set once here; crates opt in with `{ workspace = true }`.
