@@ -95,9 +95,7 @@ fn luma(args: &LumaArgs) -> Result<(), Box<dyn std::error::Error>> {
     let cached = if skip_cache {
         None
     } else {
-        cache_dir
-            .as_deref()
-            .and_then(|dir| key.load(dir))
+        cache_dir.as_deref().and_then(|dir| key.load(dir))
     };
 
     let from_cache = cached.is_some(); // before the match: `match cached` moves it
