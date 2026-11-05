@@ -1,5 +1,5 @@
-use sploot_core::cache::{self, CacheKey};
-use sploot_core::stats::ImageStats;
+use sploot_core::cache::CacheKey;
+use sploot_core::stats::{DEFAULT_BINS, Histograms, ImageStats};
 use sploot_core::{ColorSpace, Compression, Quality, SPLOOT_VERSION};
 use std::path::{Path, PathBuf};
 
@@ -40,16 +40,22 @@ fn checker_key() -> CacheKey {
         compression: Compression::Bc1,
         quality: Quality::Normal,
         mip_level: 0,
+        bins: DEFAULT_BINS,
     }
 }
 
+const PIXELS: [[f32; 4]; 3] = [
+    [0.2, 0.4, 0.6, 1.0],
+    [0.8, 0.1, 0.3, 1.0],
+    [0.5, 0.5, 0.5, 1.0],
+];
+
 fn some_stats() -> ImageStats {
-    let pixels = [
-        [0.2, 0.4, 0.6, 1.0],
-        [0.8, 0.1, 0.3, 1.0],
-        [0.5, 0.5, 0.5, 1.0],
-    ];
-    ImageStats::from_pixels(&pixels, None).expect("pixels are not empty")
+    ImageStats::from_pixels(&PIXELS, None).expect("pixels are not empty")
+}
+
+fn some_histograms() -> Histograms {
+    Histograms::from_pixels(&PIXELS, DEFAULT_BINS, 0.0, 1.0)
 }
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -81,22 +87,29 @@ fn file_stem_changes_with_settings() {
         mip_level: 1,
         ..a.clone()
     };
+    let d = CacheKey {
+        bins: 64,
+        ..a.clone()
+    };
     assert_ne!(a.file_stem(), b.file_stem());
     assert_ne!(a.file_stem(), c.file_stem());
+    assert_ne!(a.file_stem(), d.file_stem());
 }
 
 #[test]
 fn save_then_load_round_trips() {
     let dir = temp_dir("round_trip");
-    let (key, stats) = (checker_key(), some_stats());
-    cache::save(&dir, &key, &stats).unwrap();
-    assert_eq!(cache::load(&dir, &key), Some(stats));
+    let (key, stats, histograms) = (checker_key(), some_stats(), some_histograms());
+    key.save(&dir, &stats, &histograms).unwrap();
+    assert_eq!(key.load(&dir), Some((stats, histograms)));
 }
 
 #[test]
 fn save_leaves_no_tmp_file() {
     let dir = temp_dir("no_tmp");
-    cache::save(&dir, &checker_key(), &some_stats()).unwrap();
+    checker_key()
+        .save(&dir, &some_stats(), &some_histograms())
+        .unwrap();
     let names: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().file_name())
@@ -109,14 +122,14 @@ fn save_leaves_no_tmp_file() {
 fn load_misses() {
     let dir = temp_dir("misses");
     let key = checker_key();
-    assert_eq!(cache::load(&dir, &key), None, "empty folder");
+    assert_eq!(key.load(&dir), None, "empty folder");
 
-    cache::save(&dir, &key, &some_stats()).unwrap();
+    key.save(&dir, &some_stats(), &some_histograms()).unwrap();
     let other = CacheKey {
         color_space: ColorSpace::Linear,
         ..key
     };
-    assert_eq!(cache::load(&dir, &other), None, "different settings");
+    assert_eq!(other.load(&dir), None, "different settings");
 }
 
 #[test]

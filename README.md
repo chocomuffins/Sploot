@@ -64,10 +64,19 @@ To check it works, try a test image from `samples/` with a known answer:
 
 The report shows:
 
-- **Header:** size, storage format, how it was decoded, pixel count.
+- **Header:** size, storage format, how it was decoded, pixel count, and `cached` when the result came from the cache.
 - **Luminance:** average, log-average, median, min, max and std dev, in linear and as the matching sRGB 8-bit value.
-- **Average color:** linear RGB, sRGB 8-bit, and a color swatch (when the terminal supports true color and `NO_COLOR` isn't set).
+- **Average color:** linear RGB, sRGB 8-bit, a color swatch (when the terminal supports true color and `NO_COLOR` isn't set) and the HEX value.
 - **Alpha:** coverage and opaque / transparent pixel counts.
+
+### Cache
+
+Results are cached, so running `sploot luma` again on an unchanged file skips decoding it.
+An entry is reused only when the file (path, size, modified time) and the settings match; edit or re-save the file and it is measured again.
+
+- Location: the OS cache folder, e.g. `~/Library/Caches/com.chocomuffins.Sploot/<version>/` on macOS.
+- `--no-cache` measures again instead of using a cached result (the cache is still updated).
+- Safe to delete at any time.
 
 ---
 
@@ -88,8 +97,8 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 | ✅     | Plain-text report (tables)                                                                              |
 | ⬜     | JSON output (`--json`)                                                                                  |
 | ⬜     | Write diff / heatmap images to disk                                                                     |
-| ⬜     | Cache results in the OS cache folder, keyed by content hash, sploot version and color space             |
-| ⬜     | Tests: color conversions, stats, metrics                                                                |
+| ✅     | Cache results in the OS cache folder (`sploot luma`), keyed by file fingerprint and settings            |
+| 🚧     | Tests: cache done; color partly; stats, luminance, load to do (metrics, mips once they exist)           |
 
 ### 1. Mipmap comparison
 
@@ -251,7 +260,7 @@ The Release workflow checks that the tag matches the Cargo version, then runs th
 ```
 crates/
   sploot-core/   library: color (sRGB <-> linear, luminance), stats, load, metrics
-                 + mips, compress, heatmap, cache: planned (TODOs only)
+                 + cache; mips, compress, heatmap: planned (TODOs only)
   sploot-cli/    the `sploot` binary
   sploot-gui/    previewer (placeholder for now)
 samples/         test textures and DDS files (see samples/README.md)
@@ -273,7 +282,7 @@ In use, added for upcoming work, and candidates (not commitments).
 | Cache file names (hash of the key)   | `blake3`                           | in use (core: cache) |
 | Cache files; `--json` output later   | `serde`, `serde_json`              | in use (core: cache) |
 | DDS reading + BC encoding / decoding | `image_dds`                        | added, not used yet  |
-| OS cache folder                      | `directories`                      | candidate            |
+| OS cache folder                      | `directories`                      | in use (core: cache) |
 | Resampling filters                   | `fast_image_resize` or hand-rolled | candidate            |
 | Preview window                       | `eframe` / `egui`                  | candidate            |
 | In-terminal preview                  | `viuer`                            | candidate            |

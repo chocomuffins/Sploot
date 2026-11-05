@@ -1,5 +1,7 @@
 use clap::{Args, Parser, Subcommand};
-use sploot_core::{ColorSpace, linear_to_srgb_u8, load, rgb_to_hex, stats::ImageStats};
+use sploot_core::cache::{self, CacheKey};
+use sploot_core::stats::{DEFAULT_BINS, Histograms, ImageStats};
+use sploot_core::{ColorSpace, linear_to_srgb_u8, load, rgb_to_hex};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
@@ -42,10 +44,12 @@ struct LumaArgs {
     log_average: bool,
 
     /// Machine-readable output
-    // TODO: unused; print ImageStats (plus width / height / format) as JSON instead of the tables.
-    //       Needs serde::Serialize on the stats structs (see stats.rs) and serde_json.
     #[arg(long)]
     json: bool,
+
+    /// Skip cached data
+    #[arg(long)]
+    no_cache: bool,
 }
 
 // --srgb / --linear: exactly one is required.
@@ -80,29 +84,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn luma(args: &LumaArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let img = load::load(&args.input, args.color.color_space())?;
-    // TODO: alpha mask: add --alpha-cutoff <value> and pass it here instead of None,
-    //       so transparent pixels can be left out of luminance / color (see TODO(bug) in stats.rs).
-    let stats = ImageStats::from_pixels(&img.pixels, None).ok_or("image has no pixels")?;
+    let color_space = args.color.color_space();
+    let skip_cache = args.no_cache;
+
+    // Header only: enough for the cache key and the table header, without decoding.
+    let (width, height, format) = load::header(&args.input)?;
+    let key = CacheKey::for_stats(&args.input, color_space, width, height)?;
+    let cache_dir = cache::default_dir();
+
+    let cached = if skip_cache {
+        None
+    } else {
+        cache_dir
+            .as_deref()
+            .and_then(|dir| key.load(dir))
+    };
+
+    let from_cache = cached.is_some(); // before the match: `match cached` moves it
+
+    let (stats, _histograms) = match cached {
+        Some(hit) => hit,
+        None => {
+            let img = load::load(&args.input, color_space)?;
+
+            // TODO: alpha mask: add --alpha-cutoff <value> and pass it here instead of None,
+            //       so transparent pixels can be left out of luminance / color (see TODO(bug) in stats.rs).
+            let stats = ImageStats::from_pixels(&img.pixels, None).ok_or("image has no pixels")?;
+            let histograms = Histograms::from_pixels(&img.pixels, DEFAULT_BINS, 0.0, 1.0);
+
+            if let Some(dir) = &cache_dir
+                && let Err(e) = key.save(dir, &stats, &histograms)
+            {
+                eprintln!(
+                    "warning: couldn't write the cache in {}: {e}",
+                    dir.display()
+                );
+            }
+
+            (stats, histograms)
+        }
+    };
 
     println!("{}", args.input.display());
     println!(
-        "{} x {} | {} | decoded as {} | {} pixels",
-        img.width,
-        img.height,
-        img.format,
-        img.color_space,
-        thousands(img.pixels.len())
+        "{} x {} | {} | decoded as {} | {} pixels{}",
+        width,
+        height,
+        format,
+        color_space,
+        thousands(width as usize * height as usize),
+        if from_cache { " | cached" } else { "" }
     );
     println!();
 
     match stats.luminance {
         Some(l) => {
+            println!("┌{:─<15}┬{:─>15}┬{:─>16}┐", "", "", "");
             println!(
-                "| {:<13} | {:>8} | {:>10} |",
+                "│ {:<13} │ {:>13} │ {:>14} │",
                 "Luminance", "linear", "sRGB 8-bit"
             );
-            println!("|{:-<15}|{:->10}|{:->12}|", "", "", "");
+            println!("├{:─<15}┼{:─>15}┼{:─>16}┤", "", "", "");
             for (label, v) in [
                 ("average", l.average),
                 ("log-average", l.log_average),
@@ -111,13 +153,14 @@ fn luma(args: &LumaArgs) -> Result<(), Box<dyn std::error::Error>> {
                 ("max", l.max),
             ] {
                 println!(
-                    "| {:<13} | {:>8.4} | {:>10} |",
+                    "│ {:<13} │ {:>13.4} │ {:>14} │",
                     label,
                     v,
                     linear_to_srgb_u8(v as f32)
                 );
             }
-            println!("| {:<13} | {:>8.4} | {:>10} |", "std dev", l.std_dev, "");
+            println!("│ {:<13} │ {:>13.4} │ {:>14} │", "std dev", l.std_dev, "");
+            println!("└{:─<15}┴{:─>15}┴{:─>16}┘", "", "", "");
         }
         None => println!("Luminance: no visible pixels"),
     }
@@ -126,47 +169,59 @@ fn luma(args: &LumaArgs) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(rgb) = stats.rgb {
         let avg = rgb.average_color().0;
         let [r8, g8, b8] = avg.map(linear_to_srgb_u8);
+        println!("┌{:─<15}┬{:─>10}┬{:─>10}┬{:─>10}┐", "", "", "", "");
         println!(
-            "| {:<13} | {:>8} | {:>8} | {:>8} |",
+            "│ {:<13} │ {:>8} │ {:>8} │ {:>8} │",
             "Average color", "R", "G", "B"
         );
-        println!("|{:-<15}|{:->10}|{:->10}|{:->10}|", "", "", "", "");
+        println!("├{:─<15}┼{:─>10}┼{:─>10}┼{:─>10}┤", "", "", "", "");
         println!(
-            "| {:<13} | {:>8.4} | {:>8.4} | {:>8.4} |",
+            "│ {:<13} │ {:>8.4} │ {:>8.4} │ {:>8.4} │",
             "linear", avg[0], avg[1], avg[2]
         );
-        // Build the row first, so the HEX line below can be indented to the swatch column.
-        let row = format!(
-            "| {:<13} | {:>8} | {:>8} | {:>8} | ",
+        println!(
+            "│ {:<13} │ {:>8} │ {:>8} │ {:>8} │",
             "sRGB 8-bit", r8, g8, b8
         );
-        println!("{row}{}", swatch(avg));
+
+        let block = swatch(avg);
+        if !block.is_empty() {
+            println!(
+                "│ {:<13} │ {block}{:>4} │ {:>8} │ {:>8} │",
+                "sRGB color", "", "", ""
+            );
+        }
         println!(
-            "{:width$}{}",
-            "",
+            "│ {:<13} │ {:>8} │ {:>8} │ {:>8} │",
+            "Hex",
             rgb_to_hex([r8, g8, b8]),
-            width = row.len()
+            "",
+            ""
         );
+        println!("└{:─<15}┴{:─>10}┴{:─>10}┴{:─>10}┘", "", "", "", "");
         println!();
     }
 
-    println!("| {:<13} | {:>11} |", "Alpha", "");
-    println!("|{:-<15}|{:->13}|", "", "");
+    println!("┌{:─<15}┬{:─>32}┐", "", "");
+    println!("│ {:<13} │ {:>30} │", "Alpha", "");
+    println!("├{:─<15}┼{:─>32}┤", "", "");
     println!(
-        "| {:<13} | {:>10.1}% |",
+        "│ {:<13} │ {:>29.1}% │",
         "coverage",
         stats.alpha.coverage * 100.0
     );
     println!(
-        "| {:<13} | {:>11} |",
+        "│ {:<13} │ {:>30} │",
         "opaque",
         thousands(stats.alpha.opaque_count)
     );
     println!(
-        "| {:<13} | {:>11} |",
+        "│ {:<13} │ {:>30} │",
         "transparent",
         thousands(stats.alpha.transparent_count)
     );
+    println!("└{:─<15}┴{:─>32}┘", "", "");
+    println!();
 
     Ok(())
 }

@@ -1,16 +1,16 @@
 //! Result cache: one JSON file per key, written via `.tmp` + rename.
 //!
 //! TODO:
-//! - Cache folder via `directories`: ProjectDirs::from("com", "Choco", "Sploot")?.cache_dir().
 //! - Pixel results (mips, BC encodes) as DDS.
-//! - Opt-in sidecar files next to the texture.
 
-use crate::{ColorSpace, Compression, Quality, stats::ImageStats};
+use crate::{
+    ColorSpace, Compression, Quality, SPLOOT_VERSION,
+    stats::{DEFAULT_BINS, Histograms, ImageStats},
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-/// Which file (and version of it) plus the settings; any change is a cache miss.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CacheKey {
     pub path: PathBuf,
@@ -22,15 +22,23 @@ pub struct CacheKey {
     pub color_space: ColorSpace,
     pub compression: Compression,
     pub quality: Quality,
-    /// 0 = full resolution.
     pub mip_level: u8,
+    pub bins: usize,
 }
 
-/// On-disk file: key + result.
+/// The default cache folder for this version, or None if the OS doesn't have one.
+pub fn default_dir() -> Option<PathBuf> {
+    let dirs = directories::ProjectDirs::from("com", "chocomuffins", "Sploot")?;
+
+    Some(dirs.cache_dir().join(SPLOOT_VERSION))
+}
+
+/// On-disk file: key + results.
 #[derive(Serialize, Deserialize)]
 struct CacheEntry {
     key: CacheKey,
     stats: ImageStats,
+    histograms: Histograms,
 }
 
 impl CacheKey {
@@ -46,24 +54,54 @@ impl CacheKey {
         let json = serde_json::to_vec(self).expect("CacheKey serializes");
         blake3::hash(&json).to_hex().to_string()
     }
-}
 
-/// Writes `stats` for `key` into `dir`.
-pub fn save(dir: &Path, key: &CacheKey, stats: &ImageStats) -> std::io::Result<()> {
-    let path = dir.join(format!("{}.json", key.file_stem()));
-    let tmp = path.with_extension("json.tmp");
-    let entry = CacheEntry {
-        key: key.clone(),
-        stats: stats.clone(),
-    };
-    std::fs::write(&tmp, serde_json::to_string_pretty(&entry)?)?;
-    std::fs::rename(tmp, path)
-}
+    /// Key for `sploot luma` stats of a whole image (mip 0, default histogram bins).
+    pub fn for_stats(
+        path: &Path,
+        color_space: ColorSpace,
+        width: u32,
+        height: u32,
+    ) -> std::io::Result<Self> {
+        let (path, file_size, modified) = Self::fingerprint(path)?;
 
-/// Cached stats for `key`, or None on a miss.
-pub fn load(dir: &Path, key: &CacheKey) -> Option<ImageStats> {
-    let path = dir.join(format!("{}.json", key.file_stem()));
-    let text = std::fs::read_to_string(path).ok()?;
-    let entry: CacheEntry = serde_json::from_str(&text).ok()?;
-    (entry.key == *key).then_some(entry.stats)
+        Ok(Self {
+            path,
+            file_size,
+            modified,
+            width,
+            height,
+            sploot_version: SPLOOT_VERSION.to_string(),
+            color_space,
+            // Placeholders: stats aren't compressed.
+            compression: Compression::Bc1,
+            quality: Quality::Normal,
+            mip_level: 0,
+            bins: DEFAULT_BINS,
+        })
+    }
+
+    pub fn save(
+        &self,
+        dir: &Path,
+        stats: &ImageStats,
+        histograms: &Histograms,
+    ) -> std::io::Result<()> {
+        std::fs::create_dir_all(dir)?;
+        let path = dir.join(format!("{}.json", self.file_stem()));
+        let tmp = path.with_extension("json.tmp");
+        let entry = CacheEntry {
+            key: self.clone(),
+            stats: stats.clone(),
+            histograms: histograms.clone(),
+        };
+        std::fs::write(&tmp, serde_json::to_string_pretty(&entry)?)?;
+        std::fs::rename(tmp, path)
+    }
+
+    pub fn load(&self, dir: &Path) -> Option<(ImageStats, Histograms)> {
+        let path = dir.join(format!("{}.json", self.file_stem()));
+        let text = std::fs::read_to_string(path).ok()?;
+        let entry: CacheEntry = serde_json::from_str(&text).ok()?;
+        (entry.key == *self).then_some((entry.stats, entry.histograms))
+    }
 }

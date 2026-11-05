@@ -3,14 +3,13 @@
 //! Input is always linear; decoding happens before anything reaches this module.
 //!
 //! TODO:
-//! 1. histogram: only a stub; "luminance histogram output" is on the README roadmap.
-//!    The tested sketch is commented out at the bottom of this file.
+//! 1. histogram: done (histogram, Histograms); not shown in the CLI yet.
 //! 2. noise_residual: estimate_noise_sigma needs a residual as input; the function that
 //!    makes one is commented out at the bottom, so there's no noise number from an image yet.
 //! 3. Image dimensions: ImageStats::from_pixels only gets a flat pixel list. Noise needs
 //!    width / height (which pixels are neighbours); pass them in once noise joins the report.
 //! 4. White balance: compare rgb.average[0..3], e.g. red / green and blue / green.
-//! 5. Tests: add tests/stats.rs (mixed pixels, fully transparent, empty input,
+//! 5. Tests: fill in tests/stats.rs (mixed pixels, fully transparent, empty input,
 //!    odd / even medians, u8 / u16 input).
 //! 6. Bit-depth-aware alpha cutoff: desaturate_visible_pixels hard-codes 1/255,
 //!    too coarse for 16-bit alpha.
@@ -20,7 +19,6 @@
 //! Optional:
 //! - Percentiles (1st / 99th): a robust min / max that ignores hot or dead pixels (HDR).
 //! - Infinity count next to nan_count; HDR files can contain both.
-//! - serde::Serialize on the stats structs for --json (needs serde as a dependency).
 use crate::color::LinearColor;
 use serde::{Deserialize, Serialize};
 
@@ -201,6 +199,8 @@ pub struct ImageStats {
 }
 
 impl ImageStats {
+    // TODO: alpha mask: add --alpha-cutoff <value> and pass it here instead of None,
+    //       so transparent pixels can be left out of luminance / color (see TODO(bug) in stats.rs).
     /// `alpha_cutoff`: pixels with alpha at or below it are left out of rgb / luminance.
     // TODO(3): take width / height once noise is part of the report.
     // TODO(bug): with alpha_cutoff None, rgb / luminance include every pixel (visible_count = all),
@@ -278,21 +278,58 @@ pub fn desaturate_visible_pixels(pixels: &[[f32; 4]]) -> Vec<[f32; 4]> {
     kept
 }
 
-// TODO(1): implement from the sketch below: histogram(values, bins, lo, hi) -> Vec<u64>.
-pub fn histogram() {
-    todo!()
+/// Luminance and per-channel histograms of one image, sharing the same bins and range.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Histograms {
+    pub bins: usize,
+    pub lo: f32,
+    pub hi: f32,
+    pub luminance: Vec<u64>,
+    pub rgb: [Vec<u64>; 3],
 }
 
-// /// Fixed-range histogram: `bins` buckets between lo and hi; values outside are clamped into the end buckets.
-// pub fn histogram(values: &[f32], bins: usize, lo: f32, hi: f32) -> Vec<u64> {
-//     let mut h = vec![0u64; bins];
-//     let scale = bins as f32 / (hi - lo);
-//     for &v in values.iter().filter(|v| v.is_finite()) {
-//         let i = (((v - lo) * scale) as isize).clamp(0, bins as isize - 1) as usize;
-//         h[i] += 1;
-//     }
-//     h
-// }
+pub const DEFAULT_BINS: usize = 256;
+
+/// Counts values into `bins` equal buckets between `lo` and `hi`; NaN / infinity skipped.
+pub fn histogram(values: impl IntoIterator<Item = f32>, bins: usize, lo: f32, hi: f32) -> Vec<u64> {
+    let mut counts = vec![0u64; bins];
+    if bins == 0 || hi <= lo {
+        return counts;
+    }
+
+    let scale = bins as f32 / (hi - lo);
+    let last = bins - 1;
+
+    for v in values.into_iter().filter(|v| v.is_finite()) {
+        let i = ((v - lo) * scale).max(0.0) as usize;
+        counts[i.min(last)] += 1;
+    }
+    counts
+}
+
+impl Histograms {
+    /// Pass only the visible pixels if transparent ones should be left out.
+    pub fn from_pixels(pixels: &[[f32; 4]], bins: usize, lo: f32, hi: f32) -> Self {
+        let channel = |i: usize| histogram(pixels.iter().map(|p| p[i]), bins, lo, hi);
+
+        let luminance = histogram(
+            pixels
+                .iter()
+                .map(|p| LinearColor([p[0], p[1], p[2]]).luminance()),
+            bins,
+            lo,
+            hi,
+        );
+
+        Self {
+            bins,
+            lo,
+            hi,
+            luminance,
+            rgb: [channel(0), channel(1), channel(2)],
+        }
+    }
+}
 
 // /// High-pass residual: each pixel minus the mean of its 8 neighbours (edges skipped).
 // pub fn noise_residual(values: &[f32], width: usize, height: usize) -> Vec<f32> {

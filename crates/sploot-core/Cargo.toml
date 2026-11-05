@@ -12,5 +12,6 @@ encode = ["image_dds/encode"]
 image = { workspace = true }
 image_dds = { workspace = true }
 blake3 = { workspace = true }
+directories = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

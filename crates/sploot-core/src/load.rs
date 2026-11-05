@@ -48,10 +48,22 @@ pub fn load(path: &Path, color_space: ColorSpace) -> Result<LoadedImage, image::
     })
 }
 
+/// Width, height and storage format from the file header, without decoding the pixels.
+pub fn header(path: &Path) -> Result<(u32, u32, StorageFormat), image::ImageError> {
+    use image::ImageDecoder;
+
+    let decoder = image::ImageReader::open(path)?
+        .with_guessed_format()?
+        .into_decoder()?;
+    let (width, height) = decoder.dimensions();
+
+    Ok((width, height, storage_format(decoder.color_type())))
+}
+
 // TODO: EXR / HDR are on the roadmap as untested: try a real .exr and .hdr.
 //       The image crate has no f16 ColorType (f16 EXRs arrive as Rgb32F / Rgba32F), so half-float
 //       files report as 32-bit float and SampleType::F16 is never used; read the EXR header to tell.
-fn storage_format(color: image::ColorType) -> StorageFormat {
+pub fn storage_format(color: image::ColorType) -> StorageFormat {
     use image::ColorType as C;
     let sample_type = match color {
         C::L8 | C::La8 | C::Rgb8 | C::Rgba8 => SampleType::U8,
