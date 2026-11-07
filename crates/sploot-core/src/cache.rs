@@ -24,6 +24,8 @@ pub struct CacheKey {
     pub quality: Quality,
     pub mip_level: u8,
     pub bins: usize,
+    /// Alpha cutoff as `f32::to_bits`, or None; f32 can't be Eq / Hash.
+    pub alpha_cutoff: Option<u32>,
 }
 
 /// The default cache folder for this version, or None if the OS doesn't have one.
@@ -59,6 +61,7 @@ impl CacheKey {
     pub fn for_stats(
         path: &Path,
         color_space: ColorSpace,
+        alpha_cutoff: Option<f32>,
         width: u32,
         height: u32,
     ) -> std::io::Result<Self> {
@@ -77,6 +80,7 @@ impl CacheKey {
             quality: Quality::Normal,
             mip_level: 0,
             bins: DEFAULT_BINS,
+            alpha_cutoff: alpha_cutoff.map(f32::to_bits),
         })
     }
 

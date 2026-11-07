@@ -3,7 +3,7 @@
 //! Input is always linear; decoding happens before anything reaches this module.
 //!
 //! TODO:
-//! 1. histogram: done (histogram, Histograms); not shown in the CLI yet.
+//! 1. histogram: done (histogram, Histograms), shown by `sploot luma`.
 //! 2. noise_residual: estimate_noise_sigma needs a residual as input; the function that
 //!    makes one is commented out at the bottom, so there's no noise number from an image yet.
 //! 3. Image dimensions: ImageStats::from_pixels only gets a flat pixel list. Noise needs
@@ -19,7 +19,7 @@
 //! Optional:
 //! - Percentiles (1st / 99th): a robust min / max that ignores hot or dead pixels (HDR).
 //! - Infinity count next to nan_count; HDR files can contain both.
-use crate::color::LinearColor;
+use crate::color::{ColorSpace, LinearColor, LinearToSrgb};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
@@ -308,23 +308,43 @@ pub fn histogram(values: impl IntoIterator<Item = f32>, bins: usize, lo: f32, hi
 }
 
 impl Histograms {
-    /// Pass only the visible pixels if transparent ones should be left out.
-    pub fn from_pixels(pixels: &[[f32; 4]], bins: usize, lo: f32, hi: f32) -> Self {
-        let channel = |i: usize| histogram(pixels.iter().map(|p| p[i]), bins, lo, hi);
+    /// Histograms of the visible pixels over 0..1, using the same alpha rule as `ImageStats`.
+    /// `Srgb` bins sRGB-encoded values (like Photoshop); `Linear` bins the values as stored.
+    pub fn from_pixels(
+        pixels: &[[f32; 4]],
+        alpha_cutoff: Option<f32>,
+        space: ColorSpace,
+        bins: usize,
+    ) -> Self {
+        let visible = |p: &&[f32; 4]| alpha_cutoff.is_none_or(|c| p[3] > c);
+        let encode = |v: f32| match space {
+            ColorSpace::Srgb => v.linear_to_srgb(),
+            ColorSpace::Linear => v,
+        };
+
+        let channel = |i: usize| {
+            histogram(
+                pixels.iter().filter(visible).map(|p| encode(p[i])),
+                bins,
+                0.0,
+                1.0,
+            )
+        };
 
         let luminance = histogram(
             pixels
                 .iter()
-                .map(|p| LinearColor([p[0], p[1], p[2]]).luminance()),
+                .filter(visible)
+                .map(|p| encode(LinearColor([p[0], p[1], p[2]]).luminance())),
             bins,
-            lo,
-            hi,
+            0.0,
+            1.0,
         );
 
         Self {
             bins,
-            lo,
-            hi,
+            lo: 0.0,
+            hi: 1.0,
             luminance,
             rgb: [channel(0), channel(1), channel(2)],
         }

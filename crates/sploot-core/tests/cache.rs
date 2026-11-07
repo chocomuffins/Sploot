@@ -41,6 +41,7 @@ fn checker_key() -> CacheKey {
         quality: Quality::Normal,
         mip_level: 0,
         bins: DEFAULT_BINS,
+        alpha_cutoff: None,
     }
 }
 
@@ -55,7 +56,7 @@ fn some_stats() -> ImageStats {
 }
 
 fn some_histograms() -> Histograms {
-    Histograms::from_pixels(&PIXELS, DEFAULT_BINS, 0.0, 1.0)
+    Histograms::from_pixels(&PIXELS, None, ColorSpace::Srgb, DEFAULT_BINS)
 }
 
 fn temp_dir(name: &str) -> PathBuf {

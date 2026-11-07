@@ -6,11 +6,23 @@ _Low to the ground, close to the pixels._ 🐕
 
 A small command-line tool, written in Rust, for inspecting textures the way a technical artist actually needs to: comparing mip levels, previewing what compression does to an image, and pulling out numbers like average luminance.
 
-> **Status:** early development. `sploot luma` works on single files; everything else is planned. The roadmap below is the source of truth for what works today.
+> **Status:** early development. `sploot luma` works on single files (luminance, color, histograms and alpha coverage); everything else is planned. The roadmap below is the source of truth for what works today.
 
 ---
 
-## Why
+## Why "Sploot"?
+
+I'm crazy about corgis, so I wanted a name with a corgi in it. `Corgi` was already taken, so I went with **sploot**: the flat, belly-down pose where a corgi stretches its back legs out behind it, and looks very cute doing it. It suits the tool, too: low to the ground, close to the pixels.
+
+## Why I made it
+
+I wanted to learn Rust, and I stick with a language when I have a real project to be invested in. Sploot is that project. I started with C++, but Rust felt friendlier coming from my Python background.
+
+I also wanted something I would actually use: robust, multiplatform, and light enough to look closely at image details without a bulky tool or an expensive program. I'm a technical artist, and I'm driven by seeing the data behind an image, so this is a personal-interest project first.
+
+I'm still very new to Rust, so please bear with me: updates will trickle in slowly. The roadmap below is the honest picture of what works today. I do hope others also find it useful as the tool becomes more expanded upon.
+
+## What it's for
 
 A lot of what I check on a texture is the same few numbers: average luminance, average color, alpha coverage, whether the mips are right. Getting them usually means starting Photoshop or Substance Designer, waiting for it to load, and clicking through panels. That's a heavy tool for a quick question.
 
@@ -22,8 +34,6 @@ It also treats a texture the way a real-time pipeline does. A texture isn't a si
 - What's the average luminance of every albedo in this folder?
 - Do these mips actually match what a clean downsample would produce?
 - What does BC1 vs BC7 (or fast vs slow quality) do to this texture, and where does it break?
-
-Also, I just wanted to learn some more in-depth programming. I started with C++ but felt Rust was a bit more friendly coming from my Python background.
 
 ---
 
@@ -53,6 +63,7 @@ or, with the binary on your path:
 ```sh
 sploot luma <file> --srgb     # 8-bit albedo, UI, anything authored in sRGB
 sploot luma <file> --linear   # data maps (normal, roughness, masks) and float sources
+sploot luma <file> --srgb --alpha-cutoff 0.5   # leave out pixels with alpha <= 0.5
 ```
 
 One of `--srgb` / `--linear` is required: sploot (currently) does not guess the color space silently.
@@ -62,11 +73,14 @@ To check it works, try a test image from `samples/` with a known answer:
 
 ![sploot luma output](assets/screenshots/luma-overview.png)
 
+_Output of `sploot luma samples/TCom_Plant_PeaceLily01_512_albedo.png --srgb --alpha-cutoff 0.5`. Without the cutoff, the transparent background is counted too: the median and min drop to 0 and the histograms get a spike at 0._
+
 The report shows:
 
 - **Header:** size, storage format, how it was decoded, pixel count, and `cached` when the result came from the cache.
 - **Luminance:** average, log-average, median, min, max and std dev, in linear and as the matching sRGB 8-bit value.
 - **Average color:** linear RGB, sRGB 8-bit, a color swatch (when the terminal supports true color and `NO_COLOR` isn't set) and the HEX value.
+- **Histogram:** luminance and R / G / B as bar graphs from 0 to 1 (sRGB-encoded with `--srgb`).
 - **Alpha:** coverage and opaque / transparent pixel counts.
 
 ### Cache
@@ -132,20 +146,20 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned
 
 ### 3. Luminance and color stats
 
-| Status | Item                                                                                                                     |
-| ------ | ------------------------------------------------------------------------------------------------------------------------ |
-| ✅     | Average luminance (Rec. 709 weights, computed in linear space)                                                           |
-| ✅     | Log-average (geometric mean) luminance for HDR / exposure work                                                           |
-| ✅     | Min / max / median luminance, std dev                                                                                    |
-| ✅     | Per-channel average                                                                                                      |
-| ✅     | Average color swatch in the terminal (true color; skipped when piped or `NO_COLOR` is set)                               |
-| ✅     | HEX value of the average color, under the swatch                                                                         |
-| ⬜     | White balance check (R / G and B / G of the average color)                                                               |
-| ⬜     | Noise estimate (sigma from a high-pass residual)                                                                         |
-| 🚧     | Optional alpha mask (ignore transparent pixels): in core, not exposed in the CLI yet; cutoff should follow the bit depth |
-| ⬜     | Luminance histogram output                                                                                               |
-| ⬜     | Batch mode over a folder, CSV output                                                                                     |
-| ⬜     | Compare stats side by side across images or mips (luminance, average color), with the difference to the first            |
+| Status | Item                                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------------------- |
+| ✅     | Average luminance (Rec. 709 weights, computed in linear space)                                                        |
+| ✅     | Log-average (geometric mean) luminance for HDR / exposure work                                                        |
+| ✅     | Min / max / median luminance, std dev                                                                                 |
+| ✅     | Per-channel average                                                                                                   |
+| ✅     | Average color swatch in the terminal (true color; skipped when piped or `NO_COLOR` is set)                            |
+| ✅     | HEX value of the average color, under the swatch                                                                      |
+| ⬜     | White balance check (R / G and B / G of the average color)                                                            |
+| ⬜     | Noise estimate (sigma from a high-pass residual)                                                                      |
+| ✅     | Optional alpha mask: `--alpha-cutoff <0-1>` leaves out pixels at or below it (still to do: cutoff based on bit depth) |
+| ✅     | Luminance and R / G / B histograms (sRGB-encoded for `--srgb`), shown as bar graphs                                   |
+| ⬜     | Batch mode over a folder, CSV output                                                                                  |
+| ⬜     | Compare stats side by side across images or mips (luminance, average color), with the difference to the first         |
 
 ### 4. Image previewer
 
@@ -181,6 +195,7 @@ Marked `TODO(bug)` in the code.
 | Where                              | Issue                                                                                                                                 |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `sploot luma`                      | With no alpha cutoff, luminance and color include every pixel, but alpha coverage leaves out alpha-0 pixels, so the two can disagree. |
+| `sploot luma --json`               | The flag is accepted but does nothing yet; the report is always the plain-text tables.                                                |
 | `stats.rs`, `log_average`          | The epsilon assumes 0–1 values; on raw 8-bit or 16-bit data the result is wrong. The CLI always passes 0–1, so it isn't affected.     |
 | `stats.rs`, `estimate_noise_sigma` | Panics on empty input. Not reachable from the CLI yet.                                                                                |
 
@@ -203,14 +218,14 @@ sploot compress rock_albedo.png --formats bc1,bc7 --quality fast,slow --out out/
 # Average luminance of an albedo map (sRGB source)
 sploot luma rock_albedo.png --srgb
 
-# Log-average luminance of an HDR, ignoring nothing
-sploot luma sky.exr --log-average
+# Luminance of an HDR (the report always includes the log-average)
+sploot luma sky.exr --linear
 
 # Compare stats of several textures side by side (difference to the first)
 sploot luma rock_old.png rock_new.png rock_v3.png --srgb
 
 # Machine-readable output
-sploot luma textures/ --json
+sploot luma textures/ --srgb --json
 
 # Open the previewer, starting on mip 2, alpha channel
 sploot view rock_albedo.dds --mip 2 --channel a
